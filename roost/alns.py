@@ -233,6 +233,7 @@ def run_alns(prob: Problem, T: Tables, opts: Options, cfg: ALNSConfig = ALNSConf
             cand_completion_h=(ev_c.completion_h if ev_c else math.inf), accepted=accepted, new_best=new_best,
             cur_kwh=ev_S.energy_kwh, cur_completion_h=ev_S.completion_h, cur_ncr_stops=n_ncr,
             best_kwh=(best_feas_ev.energy_kwh if best_feas_ev else math.inf), lam=ctx.lam, temperature=T_now,
+            elapsed_s=time.perf_counter() - t0,
         ))
         if log_every and (it + 1) % log_every == 0:
             print(f"  it {it + 1:6d}  cur {ev_S.energy_kwh:9.4f}  best {history[-1]['best_kwh']:9.4f}  "
