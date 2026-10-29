@@ -54,9 +54,14 @@ MODES = {
 }
 
 
-def ncr_candidates(xi, grid: int | None, n_random: int | None, seed: int) -> list[Point]:
+def ncr_candidates(xi, grid: int | None, n_random: int | None, seed: int,
+                   spacing_km: float | None = None) -> list[Point]:
+    """NCR の候補．spacing_km を渡すと，格子の点の間隔がほぼ spacing_km になるよう格子の数を決める
+    （領域を客数に合わせて広げても候補の密度をそろえるため．grid より優先）．"""
     centers = [(xi.nodes[i].x_km, xi.nodes[i].y_km) for i in xi.customers]
     half = (xi.grid_half_width_km / 2.0 if xi.coord_mode == "side" else xi.grid_half_width_km) * xi.coord_scale
+    if spacing_km:
+        grid = int(round(2 * half / spacing_km)) + 1
     pts = []
     if grid:
         for a in range(grid):
@@ -99,6 +104,8 @@ def main() -> None:
     ap.add_argument("--instance", required=True, help='Xiao 型の名前 "n.d.m.h"（例 20.20.1.a）')
     ap.add_argument("--ncr-grid", type=int, default=7)
     ap.add_argument("--ncr-random", type=int, default=0)
+    ap.add_argument("--ncr-spacing-km", type=float, default=None,
+                    help="格子の間隔 [km]（指定すると --ncr-grid より優先．領域を広げても候補の密度をそろえる）")
     ap.add_argument("--modes", type=int, nargs="+", default=[5])
     ap.add_argument("--iterations", type=int, default=5000)
     ap.add_argument("--seeds", type=int, nargs="+", default=[1])
@@ -112,7 +119,7 @@ def main() -> None:
     a = ap.parse_args()
 
     xi = xiao_instance(a.instance)
-    cands = ncr_candidates(xi, a.ncr_grid, a.ncr_random, seed=0)
+    cands = ncr_candidates(xi, a.ncr_grid, a.ncr_random, seed=0, spacing_km=a.ncr_spacing_km)
     name = a.name or f"{a.instance.replace('.', '-')}-alns"
     out = Path(a.results_dir) / f"{dt.date.today():%Y%m%d}_{name}"
     raw = out / "raw"
@@ -172,7 +179,8 @@ def main() -> None:
     meta["finished"] = dt.datetime.now().isoformat(timespec="seconds")
     (out / "meta.json").write_text(json.dumps(meta, indent=1, ensure_ascii=False), encoding="utf-8")
     lines = [f"instance: {a.instance}", f"xi: {xi.xi}", f"n_customers: {xi.n_customers}",
-             f"total_demand_kg: {total_demand}", f"ncr_grid: {a.ncr_grid}", f"ncr_random: {a.ncr_random}",
+             f"total_demand_kg: {total_demand}", f"ncr_grid: {a.ncr_grid}", f"ncr_spacing_km: {a.ncr_spacing_km}",
+             f"ncr_random: {a.ncr_random}",
              f"n_ncr_candidates: {len(cands)}", f"modes: {a.modes}", f"iterations: {a.iterations}",
              f"seeds: {a.seeds}", f"tmax_min: {a.tmax_min}", f"max_visits: {a.max_visits}",
              f"capacity_kg: {a.capacity_kg}", f"phase2_scope: {a.phase2_scope}"]
