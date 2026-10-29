@@ -71,6 +71,7 @@ class Options:
     NCR_MILP の ModelOptions と同じ意味の項目は同じ名前にしてある．
     """
 
+    drones_enabled: bool = True        # ドローンを使う（False でトラックだけ．比較の段 (1)）
     allow_loops: bool = True           # 停車往復（A7）
     depot_loops: bool = True           # 出発デポでの出発前の往復（A7，#17）
     include_drone_mass: bool = True    # トラックの質量に機上のドローンの機体を含める（A11）

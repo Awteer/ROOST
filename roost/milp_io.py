@@ -30,8 +30,8 @@ VALUE_MAP_OPTIONS = Options(allow_loops=False, depot_loops=False, include_drone_
 
 # tmax_sweep.py の 5 条件．(名前, NCR を使うか, Options)
 TMAX_MODES = {
-    1: ("(1) NCR なし・トラックのみ", False, Options(allow_loops=False, depot_loops=False, include_drone_mass=False,
-                                                    max_visits=1)),
+    1: ("(1) NCR なし・トラックのみ", False, Options(drones_enabled=False, allow_loops=False, depot_loops=False,
+                                                    include_drone_mass=False, max_visits=1)),
     2: ("(2) NCR なし・往復なし", False, VALUE_MAP_OPTIONS),
     3: ("(3) NCR なし・往復あり", False, Options(allow_loops=True, depot_loops=True, include_drone_mass=True,
                                                max_visits=1)),

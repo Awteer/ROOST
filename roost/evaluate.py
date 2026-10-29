@@ -52,7 +52,8 @@ class Evaluation:
         return self.tmax_excess_h <= 0.0
 
 
-def _shape_errors(prob: Problem, T: Tables, sol: Solution, opts: Options) -> tuple[list[str], bool]:
+def _shape_errors(prob: Problem, T: Tables, sol: Solution, opts: Options,
+                  allow_unserved: bool = False) -> tuple[list[str], bool]:
     """§4.3 の形のチェック．2 つ目の戻り値は「時刻を追う計算に進めるか」（参照が壊れていたら False）．"""
     err: list[str] = []
     stops = sol.stops
@@ -89,11 +90,14 @@ def _shape_errors(prob: Problem, T: Tables, sol: Solution, opts: Options) -> tup
         if not T.drone_ok[j]:
             err.append(f"customer {j} too heavy for the drone ({prob.demand(j):.2f} kg)")
     for j in range(1, n + 1):
-        if served.get(j, 0) != 1:
-            err.append(f"customer {j} served {served.get(j, 0)} times")
+        c = served.get(j, 0)
+        if c > 1 or (c == 0 and not allow_unserved):
+            err.append(f"customer {j} served {c} times")
     if err and any("too heavy" in e for e in err):
         return err, False   # 重い客をドローンにした解は往路の表がないので時刻を追えない
 
+    if sol.drone and not opts.drones_enabled:
+        err.append("drone deliveries but drones are disabled")
     # ---- 出撃・往復の参照と向き ----
     intervals = []   # (発射の位置, 回収の位置, 客)
     loop_pos = []    # (位置, 客)
@@ -157,9 +161,13 @@ def _shape_errors(prob: Problem, T: Tables, sol: Solution, opts: Options) -> tup
     return err, True
 
 
-def evaluate(prob: Problem, T: Tables, sol: Solution, opts: Options = Options()) -> Evaluation:
-    """解を評価する．エラーがあっても計算できる所までは計算して返す（feasible=False）．"""
-    errors, can_run = _shape_errors(prob, T, sol, opts)
+def evaluate(prob: Problem, T: Tables, sol: Solution, opts: Options = Options(),
+             allow_unserved: bool = False) -> Evaluation:
+    """解を評価する．エラーがあっても計算できる所までは計算して返す（feasible=False）．
+
+    allow_unserved=True は探索の途中（壊した後・直している途中）の部分解用：まだ配っていない客をエラーにしない．
+    """
+    errors, can_run = _shape_errors(prob, T, sol, opts, allow_unserved)
     inf = float("inf")
     if not can_run:
         return Evaluation(feasible=False, errors=errors, truck_kwh=inf, drone_kwh=inf, completion_h=inf,
