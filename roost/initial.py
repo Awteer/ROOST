@@ -89,8 +89,8 @@ def string_relocation(ctx: Ctx, sol: Solution, max_rounds: int = 500) -> Solutio
     return Solution(stops=stops, drone={})
 
 
-def add_drones(ctx: Ctx, sol: Solution) -> Solution:
-    """得がなくなるまで，一番得をするドローンの配り方を 1 つずつ足す．"""
+def add_drones(ctx: Ctx, sol: Solution, with_ncr: bool = True) -> Solution:
+    """得がなくなるまで，一番得をするドローンの配り方を 1 つずつ足す．with_ncr=False なら新しい NCR の停車は開けない．"""
     while True:
         f_cur = ctx.f(ctx.ev(sol))
         best_s, best_f = None, f_cur - 1e-12
@@ -100,7 +100,7 @@ def add_drones(ctx: Ctx, sol: Solution) -> Solution:
             j = st.ref
             s_wo = sol.copy()
             s_wo.stops = [s for s in s_wo.stops if s.uid != st.uid]
-            mv, fv, s_new = best_move(ctx, s_wo, drone_moves(ctx, s_wo, ctx.ev(s_wo), j))
+            mv, fv, s_new = best_move(ctx, s_wo, drone_moves(ctx, s_wo, ctx.ev(s_wo), j, with_ncr=with_ncr))
             if s_new is not None and fv < best_f:
                 best_s, best_f = s_new, fv
         if best_s is None:

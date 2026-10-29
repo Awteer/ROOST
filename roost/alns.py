@@ -36,13 +36,14 @@ class ALNSConfig:
     sigma: tuple[float, float, float] = (33.0, 9.0, 13.0)
     seg_max: int = 100
     t0_factor_small: float = 0.5056       # 客 12 人以下（Xiao 2024 Table 3）
-    t0_factor_large: float = 0.004        # それより多い（Sacramento 2019 の T*_ST）
+    t0_factor_large: float = 0.02         # それより多い（10/29：Sacramento の 0.004 では seed を変えても同じ解に落ちたので上げた）
     small_max_n: int = 12
     lam_window: int = 100                 # λ を見直す間隔
     lam_target: float = 0.3               # T_max を守れた割合の目標
     lam_up: float = 1.2
     lam_down: float = 0.85
     lam_range: float = 100.0              # λ を [λ0/100, 100 λ0] に止める
+    initial_ncr: bool = True              # 初期解の第 3 段（ドローンの追加）で新しい NCR を開けるか
     destroy_ops: tuple[str, ...] = ("random", "cluster", "ncr_open", "ncr_close", "ncr_move")
     repair_ops: tuple[str, ...] = ("greedy_tfss", "nearby_tfss", "closest", "heavy")
 
@@ -108,7 +109,7 @@ def run_alns(prob: Problem, T: Tables, opts: Options, cfg: ALNSConfig = ALNSConf
         ev_t = ctx.ev_final(S)
         lam0 = (ev_t.energy_kwh / ev_t.completion_h) if (use_tmax and ev_t.completion_h > 0) else 0.0
         ctx.lam = lam0
-        S = add_drones(ctx, S)
+        S = add_drones(ctx, S, with_ncr=cfg.initial_ncr)
     S = finish(ctx, S)
     ev_S = ctx.ev_final(S)
     if not ev_S.feasible:

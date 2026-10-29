@@ -29,6 +29,7 @@ import roost  # noqa: E402,F401
 from xiao.instance import terrain_height_m  # noqa: E402
 
 from roost.evaluate import evaluate  # noqa: E402
+from roost.io import load_solution  # noqa: E402
 from roost.milp_io import xiao_instance  # noqa: E402
 from roost.problem import Options, Point, from_xiao  # noqa: E402
 from roost.solution import Loop, Solution, Sortie, Stop  # noqa: E402
@@ -41,15 +42,10 @@ for _f in ("Noto Sans CJK JP", "IPAexGothic", "Yu Gothic", "Meiryo", "MS Gothic"
 
 
 def load_run(prefix: str):
-    best = json.loads(Path(prefix + "_best.json").read_text(encoding="utf-8"))
+    sol, ncr = load_solution(prefix + "_best.json")
     hist_path = Path(prefix + "_history.csv")
     hist = list(csv.DictReader(hist_path.open(encoding="utf-8"))) if hist_path.exists() else []
-    stops = [Stop(uid=s["uid"], kind=s["kind"], ref=s["ref"]) for s in best["stops"]]
-    drone = {}
-    for j, d in best["drone"].items():
-        drone[int(j)] = Loop(d["at"]) if d["type"] == "loop" else Sortie(d["launch"], d["retrieve"])
-    ncr = tuple(Point(p["x_km"], p["y_km"], p["z_m"]) for p in best["ncr_points"])
-    return Solution(stops=stops, drone=drone), ncr, hist
+    return sol, ncr, hist
 
 
 def draw_map(ax, prob, T, sol, ev, xi, title, half):

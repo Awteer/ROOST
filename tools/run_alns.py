@@ -38,6 +38,7 @@ import roost  # noqa: E402,F401
 from xiao.instance import terrain_height_m  # noqa: E402
 
 from roost.alns import ALNSConfig, run_alns  # noqa: E402
+from roost.io import solution_to_dict  # noqa: E402
 from roost.milp_io import xiao_instance  # noqa: E402
 from roost.moves import SearchParams  # noqa: E402
 from roost.problem import Options, Point, from_xiao  # noqa: E402
@@ -90,13 +91,7 @@ def git_info(path: Path) -> dict:
 
 
 def solution_json(prob, sol) -> dict:
-    stops = [dict(uid=st.uid, kind=st.kind, ref=st.ref) for st in sol.stops]
-    drone = {}
-    for j, how in sorted(sol.drone.items()):
-        drone[str(j)] = dict(type="loop", at=how.at) if isinstance(how, Loop) else \
-            dict(type="sortie", launch=how.launch, retrieve=how.retrieve)
-    return dict(stops=stops, drone=drone,
-                ncr_points=[dict(ell=ell, x_km=p.x_km, y_km=p.y_km, z_m=p.z_m) for ell, p in enumerate(prob.ncr_points)])
+    return solution_to_dict(prob, sol)
 
 
 def main() -> None:
