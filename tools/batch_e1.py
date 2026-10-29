@@ -4,9 +4,10 @@
   領域の 1 辺 d は客の密度を客 8 人・20 km 四方とそろえる：d = round(20 √(n/8))（20 人 32 km，25 人 35 km，30 人 39 km）
 * NCR の候補：間隔 20/6 km の格子（客 8 人の 7×7 と同じ間隔．デポの点を除く）
 * 条件：(1)〜(5)．(1) は seed 1 だけ，(2)〜(5) は seed 1・2・3．5000 反復．積載上限なし（1e6 kg）
-* 収束の確認：n = 30 の m = 1, 2, 3 の (2) と (5)，seed 1 を 20000 反復
+* 収束の確認：n = 30 の m = 1, 2, 3 の (2) と (5)，seed 1 を 20000 反復．同じ 3 本で (3) の最良解から (3)/(5) を 20000 反復（効果 vs 計算時間）
 * phase 2：phase 1 の NCR なしの最良解から続ける 2 本立て（make_jobs の説明）
 * 初期温度の係数は --t0-factor（既定 0.02．客 12 人以下は Xiao の 0.5056 のまま）
+* 進み具合は progress.log と jobs.json（tools/e1_progress.py で見る）
 * 1 本ごとに raw/<タグ>_result.json を書く．あるものは飛ばす（途中再開）．最後に raw/summary.csv を作り直す
 
 使い方（ROOST フォルダで）：
@@ -72,6 +73,12 @@ def make_jobs(iterations: int, long_iterations: int, t0_factor: float) -> list[d
         for mode in (2, 5):
             jobs.append(dict(instance=inst, mode=mode, seed=1, iterations=long_iterations, group="convergence",
                              phase=1, start=None, tag=f"{stem}_m{mode}_s1_it{long_iterations}"))
+        # 効果 vs 計算時間（10/29）：(3) の最良解から (3)/(5) を長く続ける
+        src_tag = f"{stem}_m3_s1_it{iterations}"
+        for dst in (3, 5):
+            jobs.append(dict(instance=inst, mode=dst, seed=1, iterations=long_iterations,
+                             group="continue-long" if dst == 3 else "warm-long", phase=2, start=src_tag,
+                             tag=f"{stem}_m{dst}_from-m3_s1_it{long_iterations}"))
     for j in jobs:
         j["t0_factor"] = t0_factor
     return jobs
@@ -168,6 +175,18 @@ def main() -> None:
             platform=platform.platform(), roost=git_info(root), xiao=git_info(Path(roost.XIAO_PATH)),
             spacing_km=SPACING_KM, capacity_kg=CAPACITY_KG, n_jobs=len(jobs)), indent=1, ensure_ascii=False),
             encoding="utf-8")
+    (out / "jobs.json").write_text(json.dumps(dict(
+        total=len(jobs), tags=[j["tag"] for j in jobs], phase={j["tag"]: j["phase"] for j in jobs},
+        workers=a.workers), ensure_ascii=False), encoding="utf-8")
+    log = (out / "progress.log").open("a", encoding="utf-8")
+
+    def say(msg):
+        line = f"[{dt.datetime.now():%m-%d %H:%M:%S}] {msg}"
+        print(line, flush=True)
+        log.write(line + "\n")
+        log.flush()
+
+    say(f"start: {len(todo)} to do / {len(jobs)} jobs, workers {a.workers}")
     t0 = time.time()
     k = 0
     with mp.Pool(a.workers) as pool:
@@ -177,8 +196,10 @@ def main() -> None:
                 k += 1
                 el = time.time() - t0
                 eta = dt.datetime.now() + dt.timedelta(seconds=el / k * (len(todo) - k))
-                print(f"[{dt.datetime.now():%H:%M:%S}] {k}/{len(todo)}  {r['tag']}  best {r['best_kwh']:.3f}  "
-                      f"ncr {r['ncr_stops']}  {r['runtime_s']:.0f}s  ETA {eta:%H:%M}", flush=True)
+                say(f"{k}/{len(todo)}  {r['tag']}  best {r['best_kwh']:.3f}  ncr {r['ncr_stops']}  "
+                    f"{r['runtime_s']:.0f}s  ETA {eta:%m-%d %H:%M}")
+            if phase == 1:
+                say("phase 1 done -> phase 2")
     rows = [json.loads(p.read_text(encoding="utf-8")) for p in sorted(raw.glob("*_result.json"))]
     keys = [k for k in rows[0] if k not in ("destroy_stats", "repair_stats")]
     with (raw / "summary.csv").open("w", newline="", encoding="utf-8") as f:
@@ -188,7 +209,7 @@ def main() -> None:
             r = dict(r)
             r["truck_customer_set"] = " ".join(map(str, r["truck_customer_set"]))
             w.writerow(r)
-    print(f"wrote {raw / 'summary.csv'}  ({len(rows)} rows)  total {time.time() - t0:.0f}s")
+    say(f"FINISHED. wrote {raw / 'summary.csv'}  ({len(rows)} rows)  total {time.time() - t0:.0f}s")
 
 
 if __name__ == "__main__":
