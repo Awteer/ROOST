@@ -48,11 +48,16 @@ def load_run(prefix: str):
     return sol, ncr, hist
 
 
-def draw_map(ax, prob, T, sol, ev, xi, title, half):
-    # 背景：地形
+def terrain_grid(xi, half, k=161):
+    """背景の標高の格子（同じインスタンスを何枚も描くときは 1 回だけ計算して使い回す）．"""
     centers = [(xi.nodes[i].x_km, xi.nodes[i].y_km) for i in xi.customers]
-    g = np.linspace(-half, half, 161)
-    Z = np.array([[terrain_height_m(x, y, centers, xi.xi) for x in g] for y in g])
+    g = np.linspace(-half, half, k)
+    return g, np.array([[terrain_height_m(x, y, centers, xi.xi) for x in g] for y in g])
+
+
+def draw_map(ax, prob, T, sol, ev, xi, title, half, terrain=None):
+    # 背景：地形
+    g, Z = terrain if terrain is not None else terrain_grid(xi, half)
     cf = ax.contourf(g, g, Z, levels=20, cmap="Greys", alpha=0.35)
     if Z.max() > 0:
         ax.contour(g, g, Z, levels=np.arange(50, Z.max() + 50, 50), colors="0.55", linewidths=0.4)
