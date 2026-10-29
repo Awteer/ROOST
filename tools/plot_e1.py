@@ -139,6 +139,8 @@ def main() -> None:
     ap.add_argument("--force", action="store_true")
     ap.add_argument("--iterations", type=int, default=5000)
     ap.add_argument("--long-iterations", type=int, default=20000)
+    ap.add_argument("--noloop-long", action="store_true",
+                    help="E1c：行 = seed 1〜3，列 = (2)→(2) continue，(4) 初期解から，(2)→(4) warm（--iterations の反復）")
     ap.add_argument("--noloop", action="store_true",
                     help="往復なしだけ：行 = seed 1〜3，列 = (2)，(4)，(2)→(4) warm．png/noloop/<インスタンス>.png")
     ap.add_argument("--phase2-only", action="store_true", help="E1b：phase 2 の 4 本だけを描く（--iterations は phase 2 の反復）")
@@ -154,6 +156,15 @@ def main() -> None:
         png = png / "noloop"
         png.mkdir(exist_ok=True)
     for stem in stems:
+        if a.noloop_long:
+            panels = []
+            for sd in (1, 2, 3):
+                panels += [(f"m2_from-m2_s{sd}_it{{it}}", f"(2)→(2) continue，seed {sd}"),
+                           (f"m4_s{sd}_it{{it}}", f"(4) 初期解から，seed {sd}"),
+                           (f"m4_from-m2_s{sd}_it{{it}}", f"(2)→(4) warm，seed {sd}")]
+            tasks.append((stem, panels, 0, a.iterations, str(raw), png / f"{stem}.png",
+                          f"，往復なし {a.iterations} 反復"))
+            continue
         if a.noloop:
             panels = []
             for sd in (1, 2, 3):

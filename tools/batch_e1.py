@@ -15,6 +15,10 @@
   E1b（phase 2 だけを長く）：
   python tools/batch_e1.py --workers 5 --out results/20261029_e1b --phase2-from results/20261029_e1 \
       --instances 25.35.2.a 30.39.2.a 20.32.3.a 25.35.5.a 30.39.4.a --phase2-iterations 20000
+  E1c（往復なしだけ：(4) 初期解から・(2)→(4)・(2)→(2) を 20000 反復）：
+  python tools/batch_e1.py --workers 5 --out results/20261029_e1c --phase2-from results/20261029_e1 \
+      --instances 25.35.2.a 30.39.2.a 20.32.3.a 25.35.5.a 30.39.1.a --phase2-iterations 20000 \
+      --pairs 2:2,4 --scratch-modes 4
   python tools/batch_e1.py --workers 5 --out results/20261029_e1 --dry-run   （ジョブの一覧だけ）
 """
 
@@ -88,14 +92,19 @@ def make_jobs(iterations: int, long_iterations: int, t0_factor: float) -> list[d
 
 
 def make_jobs_phase2(instances: list[str], start_iterations: int, iterations: int, t0_factor: float,
-                     start_dir: str) -> list[dict]:
+                     start_dir: str, pairs=((2, (2, 4)), (3, (3, 5))), scratch_modes=(),
+                     seeds=(1, 2, 3)) -> list[dict]:
     """E1b（10/29 夜）：選んだインスタンスだけ phase 2（continue / warm）を長く回す．
     出発点は E1 の phase 1 の最良解（start_dir の <stem>_m{2,3}_s{seed}_it{start_iterations}_best.json）．"""
     jobs = []
     for inst in instances:
         stem = inst.replace(".", "-")
-        for seed in (1, 2, 3):
-            for src, dsts in ((2, (2, 4)), (3, (3, 5))):
+        for seed in seeds:
+            for mode in scratch_modes:   # 同じ反復数で初期解から（E1c：(4) を 20000 反復）
+                jobs.append(dict(instance=inst, mode=mode, seed=seed, iterations=iterations, group="scratch",
+                                 phase=1, start=None, t0_factor=t0_factor,
+                                 tag=f"{stem}_m{mode}_s{seed}_it{iterations}"))
+            for src, dsts in pairs:
                 src_tag = f"{stem}_m{src}_s{seed}_it{start_iterations}"
                 for dst in dsts:
                     jobs.append(dict(instance=inst, mode=dst, seed=seed, iterations=iterations,
@@ -175,14 +184,21 @@ def main() -> None:
                     help="E1b：この結果フォルダ（例 results/20261029_e1）の phase 1 の最良解から phase 2 だけを回す")
     ap.add_argument("--instances", nargs="+", default=None, help="E1b：インスタンス（例 25.35.2.a 30.39.2.a）")
     ap.add_argument("--phase2-iterations", type=int, default=20000, help="E1b：phase 2 の反復")
+    ap.add_argument("--pairs", default="2:2,4;3:3,5",
+                    help="phase 2 の組（出発の条件:続ける条件,…;…）．E1c は 2:2,4（往復なしだけ）")
+    ap.add_argument("--scratch-modes", default="", help="phase 2 と同じ反復で初期解からも回す条件（E1c は 4）")
     a = ap.parse_args()
     out = Path(a.out)
     raw = out / "raw"
     raw.mkdir(parents=True, exist_ok=True)
     if a.phase2_from:
+        pairs = tuple((int(x.split(":")[0]), tuple(int(v) for v in x.split(":")[1].split(",")))
+                      for x in a.pairs.split(";") if x)
+        scratch_modes = tuple(int(v) for v in a.scratch_modes.split(",") if v)
         jobs = make_jobs_phase2(a.instances, a.iterations, a.phase2_iterations, a.t0_factor,
-                                str(Path(a.phase2_from) / "raw"))
-        missing = [j["start"] for j in jobs if not (Path(j["start_dir"]) / f"{j['start']}_best.json").exists()]
+                                str(Path(a.phase2_from) / "raw"), pairs=pairs, scratch_modes=scratch_modes)
+        missing = [j["start"] for j in jobs if j["start"] and
+                   not (Path(j["start_dir"]) / f"{j['start']}_best.json").exists()]
         if missing:
             sys.exit(f"出発点の解がない：{missing[:5]}")
     else:
@@ -191,7 +207,10 @@ def main() -> None:
         jobs = [j for j in jobs if a.only in j["tag"]]
     todo = [j for j in jobs if not (raw / f"{j['tag']}_result.json").exists()]
     # 重いもの（客が多い・NCR あり・長い反復）から先に始める（最後に 1 本だけ残って待つ時間を減らす）
-    todo.sort(key=lambda j: (j["phase"], -j["iterations"], -int(j["instance"].split(".")[0]), -j["mode"]))
+    # phase 2 の出発点がすべて別フォルダ（--phase2-from）なら，phase を分けず 1 つの列で回す
+    one_queue = bool(a.phase2_from)
+    todo.sort(key=lambda j: (0 if one_queue else j["phase"], -j["iterations"], -int(j["instance"].split(".")[0]),
+                             -j["mode"]))
     print(f"jobs: {len(jobs)}（phase 1：{sum(j['phase'] == 1 for j in jobs)}，phase 2：{sum(j['phase'] == 2 for j in jobs)}），"
           f"done: {len(jobs) - len(todo)}，to do: {len(todo)}，workers: {a.workers}", flush=True)
     if a.dry_run:
@@ -222,8 +241,8 @@ def main() -> None:
     t0 = time.time()
     k = 0
     with mp.Pool(a.workers) as pool:
-        for phase in (1, 2):   # phase 2 は phase 1 の最良解を読むので，phase 1 が全部終わってから始める
-            batch = [(j, str(raw)) for j in todo if j["phase"] == phase]
+        for phase in ((None,) if one_queue else (1, 2)):   # phase 2 は phase 1 の最良解を読むので，phase 1 が全部終わってから
+            batch = [(j, str(raw)) for j in todo if phase is None or j["phase"] == phase]
             for r in pool.imap_unordered(run_job, batch):
                 k += 1
                 el = time.time() - t0
