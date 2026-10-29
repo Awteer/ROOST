@@ -1,0 +1,3 @@
+# roost/ 本体は標準ライブラリだけで動く（Python 3.10 以上）．XIAO（隣の code/XIAO）を import する．
+# 以下はテスト用．
+pytest
