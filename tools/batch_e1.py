@@ -12,6 +12,9 @@
 
 使い方（ROOST フォルダで）：
   python tools/batch_e1.py --workers 5 --out results/20261029_e1
+  E1b（phase 2 だけを長く）：
+  python tools/batch_e1.py --workers 5 --out results/20261029_e1b --phase2-from results/20261029_e1 \
+      --instances 25.35.2.a 30.39.2.a 20.32.3.a 25.35.5.a 30.39.4.a --phase2-iterations 20000
   python tools/batch_e1.py --workers 5 --out results/20261029_e1 --dry-run   （ジョブの一覧だけ）
 """
 
@@ -84,6 +87,24 @@ def make_jobs(iterations: int, long_iterations: int, t0_factor: float) -> list[d
     return jobs
 
 
+def make_jobs_phase2(instances: list[str], start_iterations: int, iterations: int, t0_factor: float,
+                     start_dir: str) -> list[dict]:
+    """E1b（10/29 夜）：選んだインスタンスだけ phase 2（continue / warm）を長く回す．
+    出発点は E1 の phase 1 の最良解（start_dir の <stem>_m{2,3}_s{seed}_it{start_iterations}_best.json）．"""
+    jobs = []
+    for inst in instances:
+        stem = inst.replace(".", "-")
+        for seed in (1, 2, 3):
+            for src, dsts in ((2, (2, 4)), (3, (3, 5))):
+                src_tag = f"{stem}_m{src}_s{seed}_it{start_iterations}"
+                for dst in dsts:
+                    jobs.append(dict(instance=inst, mode=dst, seed=seed, iterations=iterations,
+                                     group="continue" if dst == src else "warm", phase=2, start=src_tag,
+                                     start_dir=start_dir, t0_factor=t0_factor,
+                                     tag=f"{stem}_m{dst}_from-m{src}_s{seed}_it{iterations}"))
+    return jobs
+
+
 def run_job(args) -> dict:
     job, raw_dir = args
     from roost.alns import ALNSConfig, run_alns
@@ -103,7 +124,7 @@ def run_job(args) -> dict:
     T.Q_t = CAPACITY_KG
     initial = None
     if job["start"]:
-        initial, _ = load_solution(raw / f"{job['start']}_best.json")
+        initial, _ = load_solution(Path(job.get("start_dir") or raw) / f"{job['start']}_best.json")
     cfg = ALNSConfig(iterations=job["iterations"], t0_factor_large=job["t0_factor"])
     res = run_alns(prob, T, opts, cfg, seed=job["seed"], initial=initial)
     tag = job["tag"]
@@ -150,11 +171,22 @@ def main() -> None:
     ap.add_argument("--t0-factor", type=float, default=0.02, help="客 13 人以上の初期温度の係数（T_start = 係数 × 初期解の f）")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--only", default=None, help="タグにこの文字列を含むジョブだけ（試し用．例 20-32-1-a）")
+    ap.add_argument("--phase2-from", default=None,
+                    help="E1b：この結果フォルダ（例 results/20261029_e1）の phase 1 の最良解から phase 2 だけを回す")
+    ap.add_argument("--instances", nargs="+", default=None, help="E1b：インスタンス（例 25.35.2.a 30.39.2.a）")
+    ap.add_argument("--phase2-iterations", type=int, default=20000, help="E1b：phase 2 の反復")
     a = ap.parse_args()
     out = Path(a.out)
     raw = out / "raw"
     raw.mkdir(parents=True, exist_ok=True)
-    jobs = make_jobs(a.iterations, a.long_iterations, a.t0_factor)
+    if a.phase2_from:
+        jobs = make_jobs_phase2(a.instances, a.iterations, a.phase2_iterations, a.t0_factor,
+                                str(Path(a.phase2_from) / "raw"))
+        missing = [j["start"] for j in jobs if not (Path(j["start_dir"]) / f"{j['start']}_best.json").exists()]
+        if missing:
+            sys.exit(f"出発点の解がない：{missing[:5]}")
+    else:
+        jobs = make_jobs(a.iterations, a.long_iterations, a.t0_factor)
     if a.only:
         jobs = [j for j in jobs if a.only in j["tag"]]
     todo = [j for j in jobs if not (raw / f"{j['tag']}_result.json").exists()]

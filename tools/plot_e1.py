@@ -40,6 +40,7 @@ PANELS = [
     ("m3_from-m3_s{s}_it{it}", "(3)→(3) continue"),
     ("m5_from-m3_s{s}_it{it}", "(3)→(5) warm"),
 ]
+PHASE2_PANELS = PANELS[5:]   # E1b（phase 2 だけ）用
 LONG_PANELS = [
     ("m2_s1_it{it}", "(2) 初期解から"),
     ("m5_s1_it{it}", "(5) 初期解から"),
@@ -79,7 +80,7 @@ def plot_one(args) -> str:
     H = 7.4 * nrows + 3.2
     fig = plt.figure(figsize=(7.0 * ncols, H))
     gs = fig.add_gridspec(nrows + 1, ncols, height_ratios=[3.2] * nrows + [1.3], hspace=0.32, wspace=0.16,
-                          top=1 - 1.25 / H, bottom=0.03)
+                          top=1 - (1.25 if ncols == 3 else 1.6) / H, bottom=0.03)
     ax_h = fig.add_subplot(gs[nrows, :])
     for k, (pat, title) in enumerate(panels):
         ax = fig.add_subplot(gs[k // ncols, k % ncols])
@@ -121,9 +122,9 @@ def plot_one(args) -> str:
         Line2D([], [], c="#e67e22", ls="--", label="往復"),
         Line2D([], [], c="#c0392b", ls="--", label="出撃"),
     ]
-    fig.legend(handles=handles, loc="upper center", ncol=9, fontsize=9.5, frameon=False, bbox_to_anchor=(0.5, 1 - 0.05 / H))
+    fig.legend(handles=handles, loc="upper center", ncol=9 if ncols == 3 else 5, fontsize=9.5, frameon=False, bbox_to_anchor=(0.5, 1 - 0.05 / H))
     fig.suptitle(f"{inst}{suffix}（客 {xi.n_customers} 人，{2 * half:.0f} km 四方，ξ = {xi.xi:.0f}，"
-                 f"需要計 {xi.total_demand_kg:.0f} kg，背景は標高・等高線 50 m）", y=1 - 0.5 / H, fontsize=14)
+                 f"需要計 {xi.total_demand_kg:.0f} kg，背景は標高・等高線 50 m）", y=1 - (0.5 if ncols == 3 else 0.85) / H, fontsize=14)
     fig.savefig(png_path, dpi=90, bbox_inches="tight")
     plt.close(fig)
     return str(png_path)
@@ -137,6 +138,7 @@ def main() -> None:
     ap.add_argument("--force", action="store_true")
     ap.add_argument("--iterations", type=int, default=5000)
     ap.add_argument("--long-iterations", type=int, default=20000)
+    ap.add_argument("--phase2-only", action="store_true", help="E1b：phase 2 の 4 本だけを描く（--iterations は phase 2 の反復）")
     a = ap.parse_args()
     out = Path(a.out)
     raw = out / "raw"
@@ -146,6 +148,11 @@ def main() -> None:
     stems = sorted({t.split("_m")[0] for t in tags}, key=lambda s: tuple(map(int, s.split("-")[:3])))
     tasks = []
     for stem in stems:
+        if a.phase2_only:
+            for seed in (1, 2, 3):
+                tasks.append((stem, PHASE2_PANELS, seed, a.iterations, str(raw), png / f"{stem}_s{seed}.png",
+                              f"，seed {seed}，phase 2 {a.iterations} 反復"))
+            continue
         for seed in (1, 2, 3):
             tasks.append((stem, PANELS, seed, a.iterations, str(raw), png / f"{stem}_s{seed}.png", f"，seed {seed}"))
         if any(t.startswith(stem) and t.endswith(f"_it{a.long_iterations}") for t in tags):
