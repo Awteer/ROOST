@@ -6,6 +6,7 @@
       2 段目：(4)，(5)，(2)→(2) continue
       3 段目：(2)→(4) warm，(3)→(3) continue，(3)→(5) warm
   <インスタンス>_long.png     … 20000 反復の 4 本（n = 30 の m = 1, 2, 3 だけ）
+  --noloop のとき：noloop/<インスタンス>.png … 行 = seed 1〜3，列 = (2)，(4)，(2)→(4) warm
 あるファイルは飛ばす（途中再開．描き直すときは --force）．
 
 使い方（ROOST フォルダで）：
@@ -138,6 +139,8 @@ def main() -> None:
     ap.add_argument("--force", action="store_true")
     ap.add_argument("--iterations", type=int, default=5000)
     ap.add_argument("--long-iterations", type=int, default=20000)
+    ap.add_argument("--noloop", action="store_true",
+                    help="往復なしだけ：行 = seed 1〜3，列 = (2)，(4)，(2)→(4) warm．png/noloop/<インスタンス>.png")
     ap.add_argument("--phase2-only", action="store_true", help="E1b：phase 2 の 4 本だけを描く（--iterations は phase 2 の反復）")
     a = ap.parse_args()
     out = Path(a.out)
@@ -147,7 +150,18 @@ def main() -> None:
     tags = json.loads((out / "jobs.json").read_text(encoding="utf-8"))["tags"]
     stems = sorted({t.split("_m")[0] for t in tags}, key=lambda s: tuple(map(int, s.split("-")[:3])))
     tasks = []
+    if a.noloop:
+        png = png / "noloop"
+        png.mkdir(exist_ok=True)
     for stem in stems:
+        if a.noloop:
+            panels = []
+            for sd in (1, 2, 3):
+                panels += [(f"m2_s{sd}_it{{it}}", f"(2) NCR なし・往復なし，seed {sd}"),
+                           (f"m4_s{sd}_it{{it}}", f"(4) NCR あり・往復なし，seed {sd}"),
+                           (f"m4_from-m2_s{sd}_it{{it}}", f"(2)→(4) warm，seed {sd}")]
+            tasks.append((stem, panels, 0, a.iterations, str(raw), png / f"{stem}.png", "，往復なし"))
+            continue
         if a.phase2_only:
             for seed in (1, 2, 3):
                 tasks.append((stem, PHASE2_PANELS, seed, a.iterations, str(raw), png / f"{stem}_s{seed}.png",
