@@ -24,7 +24,7 @@
 ------------------------------------------------------------------------------------------
 * phase 1（初期解から）：(2) (3) (4) (5)
 * phase 2（phase 1 の NCR なしの最良解から．T_max なし）：(2)→(2) (2)→(4) (3)→(3) (3)→(5)
-* phase 2（T_max あり）：(2)→(2) (2)→(4) を T_max = r × T_ref，r ∈ {1.0, 0.9, 0.8}
+* phase 2（T_max あり）：(2)→(2) (2)→(4) を T_max = r × T_ref，r ∈ {1.0, 0.975, 0.95, 0.925, 0.9, 0.875, 0.85}
     T_ref ＝ 同じ舞台・同じ seed の phase 1 の (2) の最良解の完了時刻
   →(2) は「探索を足しただけ」の比べる相手．→(4)・→(5) との差が「NCR を許したことで届いた改善」
 
@@ -66,7 +66,7 @@ TERRAINS = {
 }
 BATTERIES = {"b150": 1.5, "b030": 0.30}
 LAYOUTS = tuple(f"{n}.{m}" for n in (20, 25) for m in (1, 2, 3, 4, 5))
-TMAX_RATIOS = (1.0, 0.9, 0.8)
+TMAX_RATIOS = (1.0, 0.975, 0.95, 0.925, 0.9, 0.875, 0.85)   # 2026-11-05：仮実験で 0.8 は (2) が守れない舞台が多かったので細かく
 
 _cache: dict = {}
 
@@ -151,7 +151,7 @@ def make_jobs(layouts, terrains, batteries, seeds, iterations: int, t0_factor: f
                         for src, dst in ((2, 2), (2, 4)):
                             jobs.append(dict(base, mode=dst, phase=2, group="continue" if src == dst else "warm",
                                              start=f"{st}_m{src}_s{seed}", tmax_ratio=r,
-                                             tag=f"{st}_m{dst}_from-m{src}_T{int(round(r * 100)):03d}_s{seed}"))
+                                             tag=f"{st}_m{dst}_from-m{src}_T{int(round(r * 1000)):04d}_s{seed}"))
     return jobs
 
 
