@@ -12,7 +12,7 @@ ROOST にはコピーという概念がない．同じ NCR の地点に 2 回止
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass(frozen=True)
@@ -33,6 +33,11 @@ class Problem:
     customers: tuple[Point, ...]     # 客 1..n の地点（customers[j-1] が客 j）
     demands_kg: tuple[float, ...]    # 客 1..n の需要 q_j
     ncr_points: tuple[Point, ...] = ()  # NCR の候補地点（ℓ = 0..|R|-1）
+    # 地形（roost.terrain.Terrain など，height(x_km, y_km) [m] を持つもの）．None なら従来どおり：
+    # トラックは 2 点を直線で結び，両端の標高差だけで勾配を出す．地形を渡すと，トラックのエネルギーと
+    # 走行時間を直線に沿って地形の上で積分する（tables.build_tables）．ドローンは従来どおり両端だけ（2026-11-04）
+    terrain: object = field(default=None, compare=False, hash=False, repr=False)
+    terrain_ds_m: float = 25.0       # 積分の小区間の長さ [m]
 
     @property
     def n(self) -> int:
